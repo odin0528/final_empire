@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<title>Admintasia | Powerful backend admin user interface</title>
+	<link href="style.css" rel="stylesheet" media="all" />
+	<script type="text/javascript" src="js/jquery.js"></script>
+	<script type="text/javascript" src="js/superfish.js"></script>
+	<script type="text/javascript" src="js/jquery-ui.min.js"></script>
+	<script type="text/javascript" src="js/custom.js"></script>
+	<script>
+$(function(){
+	// Dialog auto open			
+	$('#welcome_login').dialog({
+		autoOpen: true,
+		width: 370,
+		height: 430,
+		bgiframe: true,
+		modal: true,
+		buttons: {
+			"Submit !": function() {
+				window.location = "index.php";
+			}
+		}
+	});
+});
+	</script>
+</head>
+<body>
+	<div id="welcome_login" title="Welcome to Admintasia">
+		<p><b>Admintasia</b> is a <b>lightweight</b>, fully and easily customisable <b>administration user interface</b>. Please proceed to the actual demo by clicking the button below. Enjoy !</p>
+		<div class="response-msg error ui-corner-all">
+			<span>Error message</span>
+			Lorem ipsum dolor sit amet, consectetuer adipiscing elit
+		</div>
+		<div class="response-msg success ui-corner-all">
+			<span>Success message</span>
+			Lorem ipsum dolor sit amet, consectetuer adipiscing elit
+		</div>
+		<form action="#" method="post" enctype="multipart/form-data" class="forms" name="form" >
+			<ul>
+				<li>
+					<label for="email" class="desc">
+
+						Email:
+					</label>
+					<div>
+						<input type="text" tabindex="1" maxlength="255" value="" class="field text full" name="email" id="email" />
+					</div>
+				</li>
+				<li>
+					<label for="password" class="desc">
+						Password:
+					</label>
+
+					<div>
+						<input type="text" tabindex="1" maxlength="255" value="" class="field text full" name="password" id="password" />
+					</div>
+				</li>
+			</ul>
+		</form>
+	</div>
+</body>
+</html>
