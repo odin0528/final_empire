@@ -6,9 +6,11 @@ using System.Collections.Generic;
 public abstract class Character : MonoBehaviour {
 	protected Animator _Anim;
 	protected BattleGround BG;
-	private GameObject controller, HpBar;
+	private GameObject controller;
+	private Slider HpBar;
+
 	public int charId, side = 0;
-	public int charNo, x, y;
+	public int charNo, x, y, orgX, orgY;
 	public string title, name, army;
 	private Vector3 size;
 	
@@ -19,8 +21,9 @@ public abstract class Character : MonoBehaviour {
 	public int energyPool = 0, hurtPool = 0;		//損血計量
 	public int str = 10, dex = 10, sta = 10, wit = 10;
 	public int atk = 30, def = 10, res = 0, ap = 100, mp = 100, dp = 100, sp = 0, sdp = 0;
+	public float moveSpeed = 2.0f, attackSpeed = 2.0f, attackTimer = 0.0f;
 	protected int _atk, _def, _res, _ap, _mp, _dp, _sp, _sdp;
-	public int _damage, _hurt, _recovery, _dodge;
+	public int _damage, _hurt, _recovery, _dodge, _crit;
 	public int critRating = 0, dodgeRating = 0, hitRating = 0;
 	public int _critRating, _dodgeRating, _hitRating;
 	public float critRate = 2.0f;
@@ -29,7 +32,6 @@ public abstract class Character : MonoBehaviour {
 	public float[] staRate = new float[5]{1.0f,1.5f,2.0f,2.5f,3.0f};
 	public float[] intRate = new float[5]{1.0f,1.5f,2.0f,2.5f,3.0f};
 	public float hpRate, atkRate, defRate,resRate;
-	public int movementRange;
 	public Dictionary<string, Dictionary<int, Buff>> buff = new Dictionary<string, Dictionary<int, Buff>>(){
 		{"status", new Dictionary<int, Buff>()},
 		{"damage", new Dictionary<int, Buff>()},
@@ -39,6 +41,7 @@ public abstract class Character : MonoBehaviour {
 		{"end", new Dictionary<int, Buff>()},
 		{"attr", new Dictionary<int, Buff>()},
 		{"dodge", new Dictionary<int, Buff>()},
+		{"crit", new Dictionary<int, Buff>()},
 	};
 	public Dictionary<string, Dictionary<int, Debuff>> debuff = new Dictionary<string, Dictionary<int, Debuff>>(){
 		{"status", new Dictionary<int, Debuff>()},
@@ -49,6 +52,7 @@ public abstract class Character : MonoBehaviour {
 		{"end", new Dictionary<int, Debuff>()},
 		{"attr", new Dictionary<int, Debuff>()},
 		{"dodge", new Dictionary<int, Debuff>()},
+		{"crit", new Dictionary<int, Debuff>()},
 	};
 	/*
 		0	=>	'status'
@@ -61,13 +65,15 @@ public abstract class Character : MonoBehaviour {
 	public bool attacked = false;	//是否已攻擊
 	public bool dead = false;		//是否陣亡
 	public bool isComa = false;		//是否昏迷
-	public bool isMove =false, isOver = false, isCastUltimate = false;
+	public bool isMove =false, isOver = false, isCastUltimate = false, isVisible = true;
 
 	public Attack ultimate, skill1, skill2, skill3, skill4;
 	public Attack attackMode;
 	public int loopPos		=	0;
 	public int[] attackLoop = new int[0];
 	public Queue<popupText> damagePopupQueue = new Queue<popupText> ();
+	protected Character[] _target;
+	private int active;
 	
 	const float STAMINA_TO_HP = 18.0f;
 	const float STRENGTH_TO_HP = 3.8f;
@@ -94,6 +100,7 @@ public abstract class Character : MonoBehaviour {
 	const float LEVEL_TO_MAGIC_REDUCTION = 10;
 
 	bool damagePopping = false;
+	float timer = 0.0f;
 
 //	public Vector3 mScreen;
 //	public Vector2 mPoint;
@@ -149,25 +156,31 @@ public abstract class Character : MonoBehaviour {
 		this._dodgeRating	=	this.dodgeRating	=	(int)System.Math.Round(this.dodgeRating + this.dex * DEXTERITY_TO_DODGE + this.wit * INTELLECT_TO_DODGE);
 		this._hitRating		=	this.hitRating		=	(int)System.Math.Round(this.hitRating + this.dex * DEXTERITY_TO_HIT + this.wit * INTELLECT_TO_HIT);
 
-		this.HpBar = (GameObject) Instantiate (Resources.Load("Prefabs/HpBar"), transform.position, Quaternion.identity);
-		this.HpBar.transform.SetParent (GameObject.Find("Canvas").transform, false);
+		GameObject hpBar = (GameObject) Instantiate (Resources.Load("Prefabs/HpBar"), transform.position, Quaternion.identity);
+		hpBar.transform.SetParent (GameObject.Find("Canvas").transform, false);
+		this.HpBar = hpBar.GetComponent<Slider> ();
+		this.HpBar.maxValue = this.maxHp;
+		this.HpBar.value = this.maxHp;
+
 		Vector3 pos = Camera.main.WorldToScreenPoint (transform.position);
 		pos.y -= 62.5f * this.BG.scale;
-		this.HpBar.GetComponent<Slider> ().maxValue = this.maxHp;
-		this.HpBar.GetComponent<Slider> ().value = this.maxHp;
 		this.HpBar.transform.position = pos;
 
 		return this;
 	}
 
 	void Update () {
-		if(isMove == true && transform.position != this.BG.map[this.x, this.y].transform.position){
-			transform.position = Vector3.MoveTowards(transform.position, this.BG.map[this.x, this.y].transform.position, 5 * Time.deltaTime);
-		}else if( isMove == true){
+		if (isMove == true && transform.position != this.BG.map [this.x, this.y].transform.position) {
+			transform.position = Vector3.MoveTowards (transform.position, this.BG.map [this.x, this.y].transform.position, (this.BG.dist / this.moveSpeed) * Time.deltaTime);
+		}else if( this.isMove == true){
 			this.isMove = false;
-			this.isOver = true;
-			BG.checkNextRound();
+			this.nextMove();
+		}else if(this.isMove == false && this.attacked == false){
+			this.nextMove();
 		}
+
+		if (!this.attacked)
+			this.attackTimer -= Time.deltaTime;
 
 		if (this.damagePopupQueue.Count > 0 && !this.damagePopping)
 			StartCoroutine ("damagePopup");
@@ -180,32 +193,64 @@ public abstract class Character : MonoBehaviour {
 	}
 
 	public void startStep(){
-		this.resetAttr();
-		this.isMove = false;
-		this.isOver = false;
-		this.attacked = false;
-		this.buffEffect("status");
-		this.debuffEffect("status");
-		this.buffEffect("attr");
-		this.debuffEffect("attr");
+		this.nextMove ();
+	}
+
+	private void nextMove(){
+		bool flag = false;
+		if (this.attackTimer <= 0.0f) {
+			int key = (this.loopPos) % this.attackLoop.Length;
+			this.active = this.attackLoop [key];
+			
+
+			switch (this.active) {
+			case 1:
+				flag = this.caseSkill1 ();
+				break;
+			case 2:
+				flag = this.caseSkill2 ();
+				break;
+			case 3:
+				flag = this.caseSkill3 ();
+				break;
+			case 4:
+				flag = this.caseSkill4 ();
+				break;
+			}
+
+			if (!flag)
+				flag = this.attack ();
+
+			if (flag) {
+				this.addEnergy (15);
+				this.activeSuccess ();
+				this.attackTimer = this.attackSpeed;
+			}
+		}
+
+		if (flag == false) {
+			Step movePos = this.BG.getMovePath (this);
+			if (movePos != null) {
+				this.BG.map [this.x, this.y].clearChar ();
+				this.BG.map [movePos.X, movePos.Y].setChar (this);
+				this.moveTo (movePos);
+			}
+		}
+	}
+
+	public void moveTo(Step pos){
+		this.setPos(pos.X, pos.Y);
+		this.isMove = true;
 	}
 
 	public bool attackStep(){
 		if(!this.isComa){
-			if(this.en == 100 && this.isCastUltimate && this.ultimate != null){
-				if(this.castUltimate()){
-					this.en = 0;
-					this.activeSuccess();
-					this.isCastUltimate = false;
-				}
-			}
-
 			if(!this.attacked){
 				int key = (this.loopPos) % this.attackLoop.Length;
-				int active = this.attackLoop[key];
+				this.active = this.attackLoop[key];
 
 				bool flag = false;
-				switch(active){
+				switch(this.active){
 				case 1:
 					flag = this.caseSkill1();
 					break;
@@ -246,15 +291,18 @@ public abstract class Character : MonoBehaviour {
 		this.debuffEffect("end");
 		
 		//回合結束時，一次性扣掉血量
-		this.hp -= this.hurtPool;
-		this.HpBar.GetComponent<Slider> ().value = this.hp;
-		if(this.side == 1)
-			this.controller.transform.FindChild("hpBar").transform.GetComponent<Slider> ().value = this.hp;
+		this.shield -= this.hurtPool;
+		if (this.shield < 0) {
+			this.hp += this.shield;
+			this.shield = 0;
+		}
+
 		this.hurtPool = 0;
-		
 		if(this.hp > this.maxHp)
 			this.hp = this.maxHp;
-		
+
+		this.setHpBar ();
+
 		if(this.hp <= 0 && !this.dead){
 			this.die();
 			return true;	//有死人就回傳true，讓外面做戰鬥結束的判斷
@@ -275,12 +323,17 @@ public abstract class Character : MonoBehaviour {
 	}
 
 	public bool attack(){
-		Character[] target = this.getTarget(this.attackMode);
-		if(target != null && target.Length > 0){
-			this.damage(target);
+		this._target = this.BG.getTarget(this, this.attackMode);
+		if (this._target != null && this._target.Length > 0) {
+			_Anim.SetTrigger ("attack");
 			return true;
+		} else {
+			return false;
 		}
-		return false;
+	}
+
+	public void over(){
+		this.isOver = true;
 	}
 
 	void die(){
@@ -295,7 +348,7 @@ public abstract class Character : MonoBehaviour {
 	}
 
 	void disappear(){
-		Destroy(this.HpBar);
+		Destroy(this.HpBar.gameObject);
 		gameObject.SetActive (false);
 	}
 	
@@ -304,7 +357,7 @@ public abstract class Character : MonoBehaviour {
 		bool crit = false;
 		int damaged = 0;
 		if(spell == null)
-			spell = new Attack{action=1, title="攻擊", prop=1, rate=1};
+			spell = this.attackMode;
 		else
 			spell.action = 2;
 
@@ -336,10 +389,15 @@ public abstract class Character : MonoBehaviour {
 					this._damage = (int) System.Math.Round(this._damage * this.critRate);
 				t.hurt(new popupText(){type=1,value=this._damage, isCrit=crit}, this);
 
-				if(spell.buff > 0)
+				if(spell.buff > 0){
 					buff = t.addBuff(this, spell.buff);
+					if(spell.buffInstantly)
+						buff.effectInstantly();
+				}
 				if(spell.debuff > 0)
 					debuff = t.addDebuff(this, spell.debuff);
+					if(spell.debuffInstantly)
+						debuff.effectInstantly();
 			}
 
 			Dictionary<string, string> data = new Dictionary<string, string>();
@@ -369,9 +427,22 @@ public abstract class Character : MonoBehaviour {
 		this._hurt = damage.value;
 		this.buffEffect("hurt");
 		this.debuffEffect("hurt");
-		this.hurtPool += this._hurt;
+
 		damage.value = this._hurt;
 		this.damagePopupQueue.Enqueue (damage);	//傷害文字佇列
+
+		//回合結束時，一次性扣掉血量
+		this.shield -= this._hurt;
+		if (this.shield < 0) {
+			this.hp += this.shield;
+			this.shield = 0;
+		}
+
+		this.setHpBar ();
+		
+		if(this.hp <= 0 && !this.dead){
+			this.die();
+		}
 	}
 
 	public Buff addBuff(Character caster, int no){
@@ -438,17 +509,16 @@ public abstract class Character : MonoBehaviour {
 		}
 	}
 
-	public void moveTo(Step pos){
-		this.setPos(pos.X, pos.Y);
-		this.isMove = true;
-	}
-
 	//動作完成
 	void activeSuccess(){
 		this.attacked = true;
-        this.isOver = true;
         this.loopPos++;
-        BG.checkNextRound();
+//		this.over ();
+	}
+
+	//施放動畫結束
+	void activeFinish(){
+		this.attacked = false;
 	}
 
 	void addEnergy(int num){
@@ -472,6 +542,7 @@ public abstract class Character : MonoBehaviour {
 		this._damage = 0;
 		this._hurt = 0;
 		this._recovery = 0;
+		this._target = null;
 	}
 
 	public Character setArmy( int armyId){
@@ -491,6 +562,8 @@ public abstract class Character : MonoBehaviour {
 	}
 
 	public Character setPos(int x, int y){
+		this.orgX = this.x;
+		this.orgY = this.y;
 		this.x = x;
 		this.y = y;
 		return this;
@@ -508,78 +581,6 @@ public abstract class Character : MonoBehaviour {
 	public Character setSide(int side){
 		this.side = side;
 		return this;
-	}
-
-	//攻擊目標搜尋演算法
-	public Character[] getTarget(Attack attack, int[] pos = null){
-
-		//計算範圍的基準點
-		int[] center = new int[2]{
-			(pos != null)?pos[0]:this.x,
-			(pos != null)?pos[1]:this.y
-		};
-
-		int[,] attackArea = attack.range;
-		int[,] splash = (attack.splash != null)?attack.splash:null;
-
-		string searchTarget = (attack.target != null && attack.target == "ally")? "ally":"enemy";
-		
-		Ground[,] map = BG.map;
-
-		int[,] mark = new int[BG.width, BG.height];
-		Queue<Step> queue = new Queue <Step>();
-		queue.Enqueue(new Step(center[0], center[1], -1));
-		int side = this.side;
-		int dist = (int) System.Math.Floor((double) attack.range.GetLength(0) / 2);
-		List<Character> target = new List<Character>();
-		
-		if(attack.type == 3){
-			List<Character[]> targetSet = new List<Character[]>();
-			attack.mapRange.ForEach(delegate(int[,] mapRange){
-				Character[] characters = this.getTarget( new Attack(){range = mapRange, type=2});
-				if(characters.Length > 0)
-					targetSet.Add (characters);
-			});
-
-			if(targetSet.Count > 0){
-				return targetSet[Random.Range(0, targetSet.Count)];
-			}
-		}else{
-			while(queue.Count > 0){
-				Step p = queue.Dequeue();
-				if (BG.isOverBg(p.X, p.Y) || this.isOverRange(p, center, attackArea, dist) || mark[p.X, p.Y] != 0) continue;
-
-				if(this.withinRange(p, center, attackArea, dist) && map[p.X, p.Y].GetComponent<Ground>().searchTarget(this, searchTarget)){
-					if(attack.type == 1 && splash == null)		//單體攻擊
-					{
-						return new Character[] {map[p.X, p.Y].GetComponent<Ground>().getChar()};
-					}
-					else if(attack.type == 1 && attack.splash != null)	//濺射攻擊
-					{
-						return this.getTarget( new Attack(){range = attack.splash, type=2}, new int[2]{p.X, p.Y});
-					}
-					else if(attack.type == 2)	//全體攻擊
-					{
-						target.Add(map[p.X, p.Y].GetComponent<Ground>().getChar());
-					}
-				}
-				mark[p.X, p.Y] = 99;
-
-				if(side == 1){
-					queue.Enqueue(new Step(p.X - 1, p.Y, 0));
-					queue.Enqueue(new Step(p.X + 1, p.Y, 0));
-					queue.Enqueue(new Step(p.X, p.Y - 1, 0));
-					queue.Enqueue(new Step(p.X, p.Y + 1, 0));
-				}else{
-					queue.Enqueue(new Step(p.X + 1, p.Y, 0));
-					queue.Enqueue(new Step(p.X - 1, p.Y, 0));
-					queue.Enqueue(new Step(p.X, p.Y - 1, 0));
-					queue.Enqueue(new Step(p.X, p.Y + 1, 0));
-
-				}
-			}
-		}
-		return target.ToArray();
 	}
 
 	/*
@@ -605,6 +606,14 @@ public abstract class Character : MonoBehaviour {
 		return damage;
 	}
 
+	public bool canCastUltimate(){
+		if (this.side == 1) {
+			return (!this.dead && this.ultimate != null && en >= 100 && isCastUltimate && !this.isComa) ? true : false;
+		} else {
+			return (!this.dead && this.ultimate != null && en >= 100 && !this.isComa)?true:false;
+		}
+	}
+
 	//是否已完成攻擊, 僅用於移動回合判斷
 	public bool isAttacked(){
 		return this.attacked;
@@ -612,41 +621,26 @@ public abstract class Character : MonoBehaviour {
 
 
 	public bool isCrit(Character target, int attackProp){
-		int crit = 0;
+		this._crit = 0;
 		if(attackProp == 1){
-			crit = (int) System.Math.Floor(((this.critRating * (1 + (this.lv - target.lv) * 0.05)) / (this.lv * 0.38) + 5) * 100);
+			this._crit = (int) System.Math.Floor(((this.critRating * (1 + (this.lv - target.lv) * 0.05)) / (this.lv * 0.38) + 5) * 100);
 		}else{
-			crit = (int) System.Math.Floor(((this.critRating * (1 + (this.lv - target.lv) * 0.05)) / (this.lv * 0.38) + 5) * 100);
+			this._crit = (int) System.Math.Floor(((this.critRating * (1 + (this.lv - target.lv) * 0.05)) / (this.lv * 0.38) + 5) * 100);
 		}
-
-		if(Random.Range(0,10000) < crit)
+		this.buffEffect("crit");
+		this.debuffEffect("crit");
+		if(Random.Range(0,10000) < this._crit)
 			return true;
 		return false;
 	}
 	
 	public bool isDodge(Character target){
-		int dodge = 0;
-		dodge = (int) System.Math.Floor(((target.dodgeRating * (1 + (this.lv - target.lv) * 0.05) - this.hitRating) / (this.lv * 0.34) + 5) * 100);
-		if(Random.Range(0,10000) < dodge)
+		this._dodge = (int) System.Math.Floor(((target.dodgeRating * (1 + (this.lv - target.lv) * 0.05) - this.hitRating) / (this.lv * 0.34) + 5) * 100);
+		this.buffEffect("dodge");
+		this.debuffEffect("dodge");
+		if(Random.Range(0,10000) < this._dodge )
 			return true;
 		return false;
-	}
-
-	public bool isOverRange(Step step, int[] center, int[,] attackRange, int range){
-		int x = step.X - (center[0] - range);
-		int y = step.Y - (center[1] - range);
-
-		if(x > attackRange.GetLength(0) - 1 || y > attackRange.GetLength(1) -1 || x < 0 || y < 0){
-			return true;
-		}else{
-			return false;
-		}
-	}
-
-	public bool withinRange(Step step, int[] center, int[,] attackRange, int range){
-		int x = step.X - (center[0] - range);
-		int y = step.Y - (center[1] - range);
-		return (attackRange[x, y]==1)?true:false;
 	}
 
 	IEnumerator damagePopup(){
@@ -656,50 +650,89 @@ public abstract class Character : MonoBehaviour {
 		damagePopup.transform.SetParent (GameObject.Find("Canvas").transform, false);
 		damagePopup.transform.position = Camera.main.WorldToScreenPoint (transform.position);
 		damagePopup.GetComponent<DamagePopup>().damage = damage;
-		yield return new WaitForSeconds (0.5f);
+		yield return new WaitForSeconds (0.3f);
 		this.damagePopping = false;
 	}
 
-	virtual public void appear(){}	//角色出現的時候，用來設定被動技能的效果
-	virtual public bool castUltimate(){
-		Character[] target = this.getTarget(this.ultimate);
-		if(target != null && target.Length > 0){
-			this.damage(target, this.ultimate);
-			return true;
+	void setHpBar(){
+		if (this.hp < 0)
+			this.hp = 0;
+		this.HpBar.value = this.hp;
+		if(this.side == 1)
+			this.controller.transform.FindChild("hpBar").transform.GetComponent<Slider> ().value = this.hp;
+	}
+
+	virtual public void dealDamage(){
+		switch(this.active){
+			case 0:
+				this.damage(this._target);
+				break;
+			case 1:
+				this.damage(this._target, this.skill1);
+				break;
+			case 2:
+				this.damage(this._target, this.skill2);
+				break;
+			case 3:
+				this.damage(this._target, this.skill3);
+				break;
+			case 4:
+				this.damage(this._target, this.skill4);
+				break;
+			case 99:
+				this.damage(this._target, this.ultimate);
+				break;
 		}
-		return false;
+
+	}
+
+	virtual public void appear(){}	//角色出現的時候，用來設定被動技能的效果
+	virtual public void castUltimate(){
+		this._target = this.BG.getTarget(this, this.ultimate);
+		if (this._target != null && this._target.Length > 0) {
+			this.active = 99;
+			_Anim.SetTrigger ("castUltimate");
+			this.en = 0;
+			this.isCastUltimate = false;
+			this.activeSuccess();
+		} else {
+			this.endCastUltimate();
+		}
+	}
+	virtual public void endCastUltimate(){
+//		this.BG.castUltimate ();
 	}
 	virtual public bool caseSkill1(){
-		Character[] target = this.getTarget(this.skill1);
-		if(target != null && target.Length > 0){
-			this.damage(target, this.skill1);
+		this._target = this.BG.getTarget(this, this.skill1);
+		if(this._target != null && this._target.Length > 0){
+			_Anim.SetTrigger ("castSkill");
 			return true;
 		}
 		return false;
 	}
 
 	virtual public bool caseSkill2(){
-		Character[] target = this.getTarget(this.skill2);
-		if(target != null && target.Length > 0){
-			this.damage(target, this.skill2);
+		this._target = this.BG.getTarget(this, this.skill2);
+		if(this._target != null && this._target.Length > 0){
+			_Anim.SetTrigger ("castSkill");
 			return true;
 		}
 		return false;
 	}
 
 	virtual public bool caseSkill3(){
-		Character[] target = this.getTarget(this.skill3);
-		if(target != null && target.Length > 0){
-			this.damage(target, this.skill3);
+		this._target = this.BG.getTarget(this, this.skill3);
+		if(this._target != null && this._target.Length > 0){
+			_Anim.SetTrigger ("castSkill");
 			return true;
 		}
 		return false;
 	}
 
 	virtual public bool caseSkill4(){
-		Character[] target = this.getTarget(this.skill4);
-		if(target != null && target.Length > 0){
-			this.damage(target, this.skill4);
+		this._target = this.BG.getTarget(this, this.skill4);
+		if(this._target != null && this._target.Length > 0){
+			_Anim.SetTrigger ("castSkill");
 			return true;
 		}
 		return false;

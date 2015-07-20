@@ -24,6 +24,10 @@ public class Debuff : MonoBehaviour {
 	}
 	
 	virtual public void effect(){}
+	virtual public void effectInstantly(){
+		this.effect ();
+		this.duration--;
+	}
 	public bool nextRound(){
 		bool done = false;
 		this.isEnable = true;

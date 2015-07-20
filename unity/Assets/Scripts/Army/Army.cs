@@ -8,7 +8,8 @@ public class Army : MonoBehaviour{
 	public float atkRate = 1.0f;
 	public float defRate = 1.0f;
 	public float resRate = 1.0f;
-	public int movementRange = 1;
+	public float attackSpeed = 2.0f;
+	public float moveSpeed = 2.0f;
 	/*
 	public $attackRange = array(
 								array(0,0,1,0,0),
@@ -32,10 +33,14 @@ public class Army : MonoBehaviour{
 		transform.name = title;
 		Character character = transform.GetComponentInParent<Character>();
 		character.army = title;
-		character.movementRange = movementRange;
+		character.moveSpeed = moveSpeed;
+		character.attackSpeed = attackSpeed;
 		character.hpRate = hpRate;
 		character.defRate = defRate;
 		character.resRate = resRate;
 		character.atkRate = atkRate;
+		this.setAttack ();
 	}
+
+	protected virtual void setAttack(){}
 }

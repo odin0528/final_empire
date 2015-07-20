@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -10,51 +11,56 @@ public class BattleGround : MonoBehaviour {
 	public float screenHeight = 1080.0f;
 	public int width = 10;
 	public int height = 5;
-	public int moveCounter = 1;
+	public int moveCounter = 0, characterCount = 0;
 	public int roundNumber = 0;
 	public Character[] offensiveTeam = new Character[5];
 	public Character[] defenderTeam = new Character[5];
 	int[,] offensivePosition = new int[,] {{1,2},{0,1},{0,2}};
 	int[,] defenderPosition = new int[,] {{8,2},{9,1},{9,3}};
-	public float itemSize = 1.25f;
+	private float groundSize = 1.5f;
+	private float groundPadding = 0.1f;
+	public float dist;
 	public float scale;
-	private bool end = false;
-
+	public int step = 0;
+	
 	public int[] offensiveId = new int[5];
 	public int[] defenderId = new int[5];
 	public int[] offensiveLv = new int[5] {30,30,30,30,30};
 	public int[] defenderLv = new int[5] {30,30,30,30,30};
 	public int[] offensiveArmy = new int[5]{1,1,1,1,1};
 	public int[] defenderArmy = new int[5]{1,1,1,1,1};
-
+	
 	public Ground[,] map;
 	private bool someoneAttack = false;
+	Queue<Character> castUltimateQueue = new Queue<Character>();
 	
 	void Awake(){
 		Instance = this;
 	}
-
-
+	
+	
 	void Start () {
 		this.scale = (float)Screen.width/screenWidth;
-//		this.scale = new Vector2((float)Screen.width/screenWidth, (float)Screen.height/screenHeight);
-//		GUIUtility.ScaleAroundPivot(this.scale,Vector2.zero);
-//		print (scale);
-
+		this.dist = this.groundSize + this.groundPadding;
+		//		this.scale = new Vector2((float)Screen.width/screenWidth, (float)Screen.height/screenHeight);
+		//		GUIUtility.ScaleAroundPivot(this.scale,Vector2.zero);
+		//		print (scale);
+		
 		generateBoard ();
 		setOffensive ();
 		setDefender ();
-		StartCoroutine("nextRound");
-	}
 
+		StartCoroutine (waitForIt(1.5f, 1));
+	}
+	
 	//產生空的盤面
 	void generateBoard (){
 		this.map = new Ground[this.width, this.height];
 		// CleanBoard();
 		for(int i=0;i<this.height;i++){
 			for(int j=0;j<this.width;j++){
-				float y = i * itemSize + 0.1f * i + 1.0f;
-				float x = j * itemSize + 0.1f * j + 1.0f;
+				float y = i * (this.groundSize + this.groundPadding) + 1.0f;
+				float x = j * (this.groundSize + this.groundPadding) + 1.0f;
 				GameObject cloneCell = (GameObject) Instantiate(g_cell, new Vector3(x, y, 0), transform.rotation);
 				cloneCell.name = string.Format("Cell {0} - {1}", j, i);
 				cloneCell.transform.SetParent(GameObject.Find("background").transform, false);
@@ -62,7 +68,7 @@ public class BattleGround : MonoBehaviour {
 			}
 		}
 	}
-
+	
 	//設定進攻方
 	void setOffensive (){
 		for(int i=0;i < this.offensiveId.Length; i++){
@@ -70,21 +76,21 @@ public class BattleGround : MonoBehaviour {
 				//取得站位
 				int x = offensivePosition[i,0];
 				int y = offensivePosition[i,1];
-
+				
 				//插入角色物件
 				GameObject cloneCharacter = (GameObject) Instantiate(Resources.Load("Prefabs/Character/Char_" + offensiveId[i] + "/Character"), map[x,y].transform.position, transform.rotation);
 				offensiveTeam[i] = cloneCharacter.GetComponent<Character>();
 				cloneCharacter.name = string.Format("Offensive - {0}{1}", offensiveTeam[i].title, offensiveTeam[i].name);
-
+				
 				//設定角色參數
 				Dictionary<string, int> option = new Dictionary<string, int> ();
 				option.Add ("id", offensiveId[i]);
 				option.Add ("charNo", offensiveId[i]);
 				option.Add ("lv", offensiveLv[i]);
-
+				
 				int no = i+1;
 				offensiveTeam[i].setArmy(offensiveArmy[i])
-						.init(option)
+					.init(option)
 						.setSide(1)
 						.setPos (x, y)
 						.setController(GameObject.Find("Canvas/characterController" + no.ToString()))
@@ -118,7 +124,7 @@ public class BattleGround : MonoBehaviour {
 				GameObject cloneCharacter = (GameObject) Instantiate(Resources.Load("Prefabs/Character/char_" + defenderId[i] + "/Character"), map[x,y].transform.position, transform.rotation);
 				defenderTeam[i] = cloneCharacter.GetComponent<Character>();
 				cloneCharacter.name = string.Format("Defender - {0}{1}", defenderTeam[i].title, defenderTeam[i].name);
-
+				
 				
 				//設定角色參數
 				Dictionary<string, int> option = new Dictionary<string, int> ();
@@ -140,172 +146,114 @@ public class BattleGround : MonoBehaviour {
 			}
 		}
 	}
-		
-	IEnumerator nextRound(){
-		if (this.someoneAttack)
-			yield return new WaitForSeconds (1.5f);
-		else
-			yield return 0;
-		this.startStep ();
-//		this.ultimateStep ();
-		this.attackStep ();
-		this.moveStep();
-	}
-
-	public void checkNextRound(){
-		foreach(Character character in offensiveTeam){
-			if(character && character.isOver == false){
-				return;
-			}
+	
+	IEnumerator waitForIt(float seconds, int step){
+//		print ("wait for it");
+		yield return new WaitForSeconds (seconds);
+		switch(step){
+		case 1:
+			this.startStep();
+			break;
+		case 2:
+			this.startStep ();
+			break;
 		}
-
-		foreach(Character character in defenderTeam){
-			if(character && character.isOver == false){
-				return;
-			}
-		}
-
-		this.endStep();
-        //行動完成後二秒，再去執行下一回合
-		StartCoroutine ("nextRound");
 	}
-
-	public void startStep(){
-		this.roundNumber++;
-		this.roundCounter.transform.GetComponent<UnityEngine.UI.Text> ().text = "Round " + this.roundNumber.ToString();
-		this.moveCounter = 1;
+	
+	void nextRound(){
+		this.characterCount = 0;
+		this.moveCounter = 0;
 		this.someoneAttack = false;
-		//		print ("Round" + this.roundNumber.ToString());
-		
+		this.step = 1;
+	}
+	
+	void startStep(){
 		//回合開始時，所有角色進行處理狀態debuff buff
 		foreach(Character character in offensiveTeam){
 			if(character && !character.dead){
 				character.startStep();
+				this.characterCount++;
 			}
 		}
 		
 		foreach(Character character in defenderTeam){
 			if(character && !character.dead){
 				character.startStep();
+				this.characterCount++;
 			}
 		}
 	}
-
-	public void ultimateStep(){
-		//回合開始時，所有角色進行處理狀態debuff buff
-		foreach(Character character in offensiveTeam){
-			if(character && !character.dead){
-				character.startStep();
-			}
-		}
+	
+	//攻擊目標搜尋演算法
+	public Character[] getTarget(Character character, Attack attack, int[] pos = null){
 		
-		foreach(Character character in defenderTeam){
-			if(character && !character.dead){
-				character.startStep();
-			}
-		}
-	}
-
-	void attackStep(){
-		//回合開始時，所有角色進行處理狀態debuff buff
-		foreach(Character character in offensiveTeam){
-			if(character && !character.dead){
-				this.someoneAttack = character.attackStep();
-			}
-		}
+		//計算範圍的基準點
+		int[] center = new int[2]{
+			(pos != null)?pos[0]:character.x,
+			(pos != null)?pos[1]:character.y
+		};
 		
-		foreach(Character character in defenderTeam){
-			if(character && !character.dead){
-				this.someoneAttack = character.attackStep();
-			}
-		}
-	}
-
-	void moveStep(){
-		bool om = false, dm = false;
-		do{
-			om = offensiveMove();
-			dm = defenderMove();
-			moveCounter++;
-		}while(om || dm);
-	}
-
-	private void endStep(){
-		bool offensiveTeamGameOver = true;
-		bool defenderTeamGameOver = true;
-
-		//角色死亡處理
-		foreach(Character character in offensiveTeam){
-			//若角色沒死亡，而且進行結束階段後還活著
-			if(character && !character.dead && !character.endStep()){
-				offensiveTeamGameOver =false;
-			}
-		}
-
-		foreach(Character character in defenderTeam){
-			if(character && !character.dead && !character.endStep()){
-				defenderTeamGameOver=false;
-			}
-		}
-
-		if (offensiveTeamGameOver || defenderTeamGameOver) {
-			print ("game over");
-			this.end = true;
-		}
+		int[,] attackArea = attack.range;
+		int[,] splash = (attack.splash != null)?attack.splash:null;
 		
-		//若有人死亡，就做結束遊戲的計算
-		/*if(offensiveTeamGameOver && defenderTeamGameOver)
-			return "both";
-		else if(offensiveTeamGameOver)
-			return "defender";
-		else if(defenderTeamGameOver)
-			return "offensive";
-		else
-			return false;*/
-	}
-
-	bool offensiveMove(){
-		bool flag = false;
-		foreach(Character character in offensiveTeam){
-			if(character){
-				if(character.dead || character.isAttacked())	continue;
-				//若角色的移動力大於等於步數，就再進行移動
-				if(character.movementRange >= moveCounter){
-					Step moveTo = getMovePath(character);
-					if(moveTo != null){
-						this.map[character.x, character.y].clearChar();
-						this.map[moveTo.X, moveTo.Y].setChar(character);
-						character.moveTo(moveTo);
-						flag = true;
+		string searchTarget = (attack.target != null && attack.target == "ally")? "ally":"enemy";
+		
+		int[,] mark = new int[this.width, this.height];
+		Queue<Step> queue = new Queue <Step>();
+		queue.Enqueue(new Step(center[0], center[1], -1));
+		int side = character.side;
+		int dist = (int) System.Math.Floor((double) attack.range.GetLength(0) / 2);
+		List<Character> target = new List<Character>();
+		
+		if(attack.type == 3){
+			List<Character[]> targetSet = new List<Character[]>();
+			attack.mapRange.ForEach(delegate(int[,] mapRange){
+				Character[] characters = this.getTarget(character, new Attack(){range = mapRange, type=2});
+				if(characters.Length > 0)
+					targetSet.Add (characters);
+			});
+			
+			if(targetSet.Count > 0){
+				return targetSet[Random.Range(0, targetSet.Count)];
+			}
+		}else{
+			while(queue.Count > 0){
+				Step p = queue.Dequeue();
+				if (this.isOverBg(p.X, p.Y) || this.isOverRange(p, center, attackArea, dist) || mark[p.X, p.Y] != 0) continue;
+				
+				if(this.withinRange(p, center, attackArea, dist) && map[p.X, p.Y].searchTarget(character, searchTarget)){
+					if(attack.type == 1 && splash == null)		//單體攻擊
+					{
+						return new Character[] {map[p.X, p.Y].getChar()};
 					}
+					else if(attack.type == 1 && attack.splash != null)	//濺射攻擊
+					{
+						return this.getTarget(character, new Attack(){range = attack.splash, type=2}, new int[2]{p.X, p.Y});
+					}
+					else if(attack.type == 2)	//全體攻擊
+					{
+						target.Add(map[p.X, p.Y].getChar());
+					}
+				}
+				mark[p.X, p.Y] = 99;
+				
+				if(side == 1){
+					queue.Enqueue(new Step(p.X - 1, p.Y, 0));
+					queue.Enqueue(new Step(p.X + 1, p.Y, 0));
+					queue.Enqueue(new Step(p.X, p.Y - 1, 0));
+					queue.Enqueue(new Step(p.X, p.Y + 1, 0));
+				}else{
+					queue.Enqueue(new Step(p.X + 1, p.Y, 0));
+					queue.Enqueue(new Step(p.X - 1, p.Y, 0));
+					queue.Enqueue(new Step(p.X, p.Y - 1, 0));
+					queue.Enqueue(new Step(p.X, p.Y + 1, 0));
+					
 				}
 			}
 		}
-		return flag;
+		return target.ToArray();
 	}
-
-	bool defenderMove(){
-		bool flag = false;
-		foreach(Character character in defenderTeam){
-			if(character){
-				if(character.dead || character.isAttacked())	continue;
-				//若角色的移動力大於等於步數，就再進行移動
-				if(character.movementRange >= moveCounter){
-					Step moveTo = getMovePath(character);
-					if(moveTo != null){
-						this.map[character.x, character.y].clearChar();
-						this.map[moveTo.X, moveTo.Y].setChar(character);
-						character.moveTo(moveTo);
-						flag = true;
-					}else{
-						character.isMove = true;
-					}
-				}
-			}
-		}
-		return flag;
-	}
-
+	
 	//移動路徑演算法
 	public Step getMovePath(Character character){
 		int[] pos = character.getPos();
@@ -318,15 +266,15 @@ public class BattleGround : MonoBehaviour {
 		int side = character.side;
 		bool hasEnemy = false;
 		int i_step = -1;
-
+		
 		//尋找同一列的敵人
 		if(side == 1){
 			for(int i = 1; i < this.width; i++){
 				if(startX + i >= this.width && startX - i < 0)
 					break;
-
-				if((startX + i < this.width && this.map[startX + i, startY].GetComponent<Ground>().isEnemy(character)) || 
-				  (startX - i >= 0 && this.map[startX - i, startY].GetComponent<Ground>().isEnemy(character))){
+				
+				if((startX + i < this.width && this.map[startX + i, startY].isEnemy(character)) || 
+				   (startX - i >= 0 && this.map[startX - i, startY].isEnemy(character))){
 					hasEnemy = true;
 					break;
 				}
@@ -336,22 +284,22 @@ public class BattleGround : MonoBehaviour {
 				if(startX + i >= this.width && startX - i < 0)
 					break;
 				
-				if((startX - i >= 0 && this.map[startX - i, startY].GetComponent<Ground>().isEnemy(character)) || 
-				   (startX + i < this.width && this.map[startX + i, startY].GetComponent<Ground>().isEnemy(character))){
+				if((startX - i >= 0 && this.map[startX - i, startY].isEnemy(character)) || 
+				   (startX + i < this.width && this.map[startX + i, startY].isEnemy(character))){
 					hasEnemy = true;
 					break;
 				}
 			}
 		}
-
+		
 		//可攻擊位置計算
 		bool[,] attackPosition = this.getAttackPosition(character);
 		if(attackPosition[startX, startY] == true)	//如果現在的位置就可以打人就停止
 			return null;
-
+		
 		while(queue.Count > 0){
 			Step p = queue.Dequeue();
-
+			
 			//如果超出範圍，或是已經計算過，或是不在起點又不可移動的時候就跳過換下一個
 			if (this.isOverBg(p.X, p.Y) || mark[p.X, p.Y] != 0 || 
 			    (p.X != startX || p.Y != startY) && !this.map[p.X, p.Y].GetComponent<Ground>().isMovable()) 
@@ -391,9 +339,9 @@ public class BattleGround : MonoBehaviour {
 					queue.Enqueue(new Step(p.X + 1, p.Y, index));
 				}
 			}
-
+			
 		}
-
+		
 		if (i_step > -1){
 			Stack <Step> moveStack = new Stack <Step>();
 			Step lastStep = footprint[i_step];
@@ -406,19 +354,19 @@ public class BattleGround : MonoBehaviour {
 		}
 		return null;
 	}
-
+	
 	//取得可以攻擊的位置
 	public bool[,] getAttackPosition(Character character){
 		bool[,] attackPos = new bool[this.width, this.height];
 		int side = character.side;
 		Character[] enemyTeam;
-
+		
 		if (side == 1) {
 			enemyTeam = this.defenderTeam;
 		} else {
 			enemyTeam = this.offensiveTeam;
 		}
-
+		
 		foreach (Character enemy in enemyTeam) {
 			if (enemy) {
 				if (enemy.dead)
@@ -426,7 +374,7 @@ public class BattleGround : MonoBehaviour {
 				int[] pos = enemy.getPos ();
 				int range = character.attackMode.range.GetLength (0);
 				int dist = (int)System.Math.Floor ((double)range / 2);
-
+				
 				for (int i=0; i < range; i++) {
 					for (int j=0; j < range; j++) {
 						int x = pos [0] + (i - dist);
@@ -438,10 +386,27 @@ public class BattleGround : MonoBehaviour {
 				}
 			}
 		}
-
+		
 		return attackPos;
 	}
-
+	
+	public bool isOverRange(Step step, int[] center, int[,] attackRange, int range){
+		int x = step.X - (center[0] - range);
+		int y = step.Y - (center[1] - range);
+		
+		if(x > attackRange.GetLength(0) - 1 || y > attackRange.GetLength(1) -1 || x < 0 || y < 0){
+			return true;
+		}else{
+			return false;
+		}
+	}
+	
+	public bool withinRange(Step step, int[] center, int[,] attackRange, int range){
+		int x = step.X - (center[0] - range);
+		int y = step.Y - (center[1] - range);
+		return (attackRange[x, y]==1)?true:false;
+	}
+	
 	public bool isOverBg(int x, int y){
 		if(x > this.width - 1 || y > height -1 || x < 0 || y < 0){
 			return true;
@@ -449,7 +414,7 @@ public class BattleGround : MonoBehaviour {
 			return false;
 		}
 	}
-
+	
 	void Paint(int[,] mark){
 		for(int i=0;i<this.height;i++){
 			for(int j=0;j<this.width;j++){
@@ -462,7 +427,7 @@ public class BattleGround : MonoBehaviour {
 			}
 		}
 	}
-
+	
 	public void addMessage(string key, Dictionary<string, string> data){
 		string msg = "";
 		switch (key) {
@@ -477,7 +442,7 @@ public class BattleGround : MonoBehaviour {
 		case "endStep":
 			msg = string.Format("{0} 身上的 {1} 消失", data ["targetTitle"], data ["title"]);
 			break;
-		
+			
 		case "damage":
 			msg = string.Format("{0} 對 {1} 造成了 {2} 傷害", data ["title"], data ["targetTitle"], data["damage"]);
 			break;
@@ -523,8 +488,8 @@ public class BattleGround : MonoBehaviour {
 			msg = string.Format ("{0} 死亡", data ["title"]);
 			break;
 		}
-
-//		print (msg);
+		
+		print (msg);
 	}
 }
 

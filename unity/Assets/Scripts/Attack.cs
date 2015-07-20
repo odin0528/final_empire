@@ -5,7 +5,7 @@ using System.Collections.Generic;
 public class Attack {
 	public int action = 1;		//行為1 普攻 2技能
 	public float rate = 1.0f;	//倍率
-	public string title;
+	public string title = "攻擊";
 	public int type = 1;
 	//1:單體  
 	//2:範圍(有splash的時候，type還是帶1就好)
@@ -21,6 +21,9 @@ public class Attack {
 	public string target;		//ally 同隊
 	public int buff;
 	public int debuff;
+	public bool buffInstantly = false;
+	public bool debuffInstantly = false;
+
 
 	public void setRange(int[,] newRange){
 		range = newRange;

@@ -32,10 +32,10 @@ public class Ground : MonoBehaviour {
 	}
 
 	public bool isEnemy(Character character){
-		return (this.side != 0 && character.side != this.side);
+		return (this.side != 0 && character.side != this.side && !character.dead && character.isVisible);
 	}
 	
 	public bool isAlly(Character character){
-		return (this.side != 0 && character.side == this.side);
+		return (this.side != 0 && character.side == this.side && !character.dead && character.isVisible);
 	}
 }

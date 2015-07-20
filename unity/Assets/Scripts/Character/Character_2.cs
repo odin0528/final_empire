@@ -20,7 +20,8 @@ public class Character_2 : Character {
 				{1,1,1},
 				{0,1,0}
 			},
-			debuff = 1
+			debuff = 1,
+			debuffInstantly = true
 		};
 
 		this.skill1 = new Attack (){

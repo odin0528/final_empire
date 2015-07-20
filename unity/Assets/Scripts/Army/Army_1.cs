@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 
 public class Army_1 : Army {
-	void Start(){
+	protected override void setAttack(){
 		Attack newAttack = new Attack ();
 		newAttack.setRange (new int[3,3] {
 			{1,1,1},
