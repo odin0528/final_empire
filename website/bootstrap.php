@@ -1,4 +1,9 @@
 <?php 
+$string = '<img  src="http://124.11.67.218/mohist/upload/AAA/20150716161501_20f66.jpg"><br>';
+var_dump(json_encode($string));
+exit;
+
+
 header('P3P: CP="NOI ADM DEV PSAi NAV OUR STP IND DEM"');
 header('Content-type: text/html; charset=utf-8'); 
 ini_set('display_errors','on');
